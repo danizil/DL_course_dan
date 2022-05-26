@@ -87,8 +87,16 @@ def create_train_validation_loaders(
     num_val = int(num_samples*validation_ratio)
     num_train = num_samples - num_val
     # Create a Dataloader containing the entire dataset with the indices gone over with a custom sampler. 
-    dl_train = torch.utils.data.DataLoader(dataset, sampler=IndexSampler(dataset, torch.arange(num_train)))    
-    dl_valid = torch.utils.data.DataLoader(dataset, sampler=IndexSampler(dataset, torch.arange(num_train, num_samples)))
+    dl_train = torch.utils.data.DataLoader(
+        dataset, 
+        sampler=IndexSampler(dataset, torch.arange(num_train)), 
+        batch_size=batch_size, 
+        num_workers=num_workers)    
+    dl_valid = torch.utils.data.DataLoader(
+        dataset, 
+        sampler=IndexSampler(dataset, torch.arange(num_train, num_samples)), 
+        batch_size=batch_size,
+        num_workers=num_workers)
     
     # ========================
 

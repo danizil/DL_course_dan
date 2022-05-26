@@ -1,10 +1,9 @@
 import torch
 from torch import Tensor
 from collections import namedtuple
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader 
 
 from .losses import ClassifierLoss
-
 
 class LinearClassifier(object):
     def __init__(self, n_features, n_classes, weight_std=0.001):
@@ -19,11 +18,12 @@ class LinearClassifier(object):
 
         # TODO:
         #  Create weights tensor of appropriate dimensions
-        #  Initialize it from a normal dist with zero mean and the given std.
+        #  Initialize it from a normal distribution with zero mean and the given std.
+        
 
         self.weights = None
         # ====== YOUR CODE: ======
-        raise NotImplementedError()
+        self.weights = torch.normal(mean=torch.zeros(n_features, n_classes), std=weight_std)
         # ========================
 
     def predict(self, x: Tensor):
@@ -45,7 +45,8 @@ class LinearClassifier(object):
 
         y_pred, class_scores = None, None
         # ====== YOUR CODE: ======
-        raise NotImplementedError()
+        class_scores = x@self.weights
+        y_pred = torch.argmax(class_scores, dim=1)
         # ========================
 
         return y_pred, class_scores
@@ -66,7 +67,7 @@ class LinearClassifier(object):
 
         acc = None
         # ====== YOUR CODE: ======
-        raise NotImplementedError()
+        acc = 1/len(y)*torch.sum(y_pred - y == 0)
         # ========================
 
         return acc * 100
@@ -78,15 +79,18 @@ class LinearClassifier(object):
         loss_fn: ClassifierLoss,
         learn_rate=0.1,
         weight_decay=0.001,
-        max_epochs=100,
+        max_epochs=1000,
     ):
 
         Result = namedtuple("Result", "accuracy loss")
         train_res = Result(accuracy=[], loss=[])
         valid_res = Result(accuracy=[], loss=[])
 
-        print("Training", end="")
+        print(self.weights.shape)
+
+        print("Training\n", end="")
         for epoch_idx in range(max_epochs):
+            print(f'epoch {epoch_idx}')
             total_correct = 0
             average_loss = 0
 
@@ -102,7 +106,46 @@ class LinearClassifier(object):
             #     using the weight_decay parameter.
 
             # ====== YOUR CODE: ======
-            raise NotImplementedError()
+            loss_train = 0
+            accuracy_train = 0
+            print('train')
+            for i, batch_train in enumerate(dl_train):
+                print(f'batch {i}')
+                # every batch has batch_size samples and lables
+                # dl train in this case is 8000 samples i.e. 8 batches of 1000 val has 2000
+                
+                y_pred, x_scores = self.predict(batch_train[0])
+                
+                batch_loss = loss_fn(batch_train[0], batch_train[1], x_scores) + weight_decay/2*torch.sum(self.weights**2)
+                loss_train = loss_train + batch_loss
+                
+                grad = loss_fn.grad() + weight_decay*self.weights
+                print(f'grad shape: {grad.shape}')
+                self.weights = self.weights - learn_rate* grad
+
+                accuracy_train = accuracy_train + self.evaluate_accuracy(batch_train[1], y_pred)    
+            
+            loss_train = loss_train/len(dl_train)
+            train_res[0].append(accuracy_train)
+            train_res[1].append(loss_train)
+            
+            print('val')
+            loss_val = 0
+            accuracy_val = 0
+            for j, batch_val in enumerate(dl_valid):
+                print(f'batch {j}')
+                y_pred, x_scores = self.predict(batch_val[0])
+                
+                batch_loss = loss_fn(batch_val[0], batch_val[1], x_scores) + weight_decay/2*torch.sum(self.weights**2)
+                loss_val = loss_val + batch_loss
+
+                accuracy_val = accuracy_val + self.evaluate_accuracy(batch_val[1], y_pred)
+
+            loss_val = loss_val/len(dl_valid)
+            valid_res[1].append(loss_val)
+            valid_res[0].append(accuracy_val)
+            
+
             # ========================
             print(".", end="")
 
@@ -136,7 +179,9 @@ def hyperparams():
     #  Manually tune the hyperparameters to get the training accuracy test
     #  to pass.
     # ====== YOUR CODE: ======
-    raise NotImplementedError()
+    hp['weight_std'] = 0.01
+    hp['learn_rate'] = 0.1
+    hp['weight_decay'] = 0.1
     # ========================
 
     return hp

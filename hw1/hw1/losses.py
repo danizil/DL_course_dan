@@ -1,4 +1,5 @@
 import abc
+from audioop import mul
 import torch
 
 
@@ -25,10 +26,11 @@ class ClassifierLoss(abc.ABC):
 
 class SVMHingeLoss(ClassifierLoss):
     def __init__(self, delta=1.0):
+        assert delta>0
         self.delta = delta
         self.grad_ctx = {}
 
-    def loss(self, x, y, x_scores, y_predicted):
+    def loss(self, x, y, x_scores, y_predicted=torch.tensor([])):
         """
         Calculates the Hinge-loss for a batch of samples.
 
@@ -52,12 +54,20 @@ class SVMHingeLoss(ClassifierLoss):
 
         loss = None
         # ====== YOUR CODE: ======
-        raise NotImplementedError()
+        M = x_scores - x_scores.gather(1, y[:, None]) + self.delta
+        L_is = torch.clone(M)
+        L_is[L_is<0] = 0
+        # COMMENT: we remove the length of the vector y times 
+        # delta from the loss because delta is added to every correct element which is now zero
+        loss = 1/len(y)*(torch.sum(L_is) - self.delta*len(y))
         # ========================
 
         # TODO: Save what you need for gradient calculation in self.grad_ctx
         # ====== YOUR CODE: ======
-        raise NotImplementedError()
+        self.grad_ctx['hinged_margin'] = L_is
+        self.grad_ctx['x'] = x
+        self.grad_ctx['y'] = y
+        self.grad_ctx['num_classes'] = x_scores.shape[1]
         # ========================
 
         return loss
@@ -75,7 +85,27 @@ class SVMHingeLoss(ClassifierLoss):
 
         grad = None
         # ====== YOUR CODE: ======
-        raise NotImplementedError()
+        L_is = self.grad_ctx['hinged_margin']
+        x = self.grad_ctx['x'] 
+        y = self.grad_ctx['y']
+        num_classes = self.grad_ctx['num_classes']
+
+        # G = L_is
+        # G[G<0] = 0
+        # G[G]
+
+        NCD = x.view(x.shape[0], 1, x.shape[1]).repeat(1,num_classes, 1)
+        margin_mask = L_is > 0
+        NCD = NCD*margin_mask[:, :, None]
+        
+        # L_is[L_is==1] = 0
+        multiply_yi = -(torch.sum(L_is, dim=1) - self.delta)
+        mask_yi = torch.ones_like(L_is)
+        mask_yi[list(range(len(y))), y] = multiply_yi # V
+        NCD = NCD*mask_yi[:, :, None]
+        
+        grad = 1/len(y)*torch.sum(NCD, dim=0).T 
+        
         # ========================
 
         return grad
